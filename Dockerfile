@@ -11,6 +11,8 @@ RUN apk update \
   ffmpeg \
   opus \
   python3 \
+  py3-pip \
+  py3-wheel \
   libsodium-dev \
 \
 # Install build dependencies
