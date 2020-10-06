@@ -71,7 +71,7 @@ class MusicBot(discord.Client):
         self.cached_app_info = None
         self.last_status = None
 
-        self.config = Config(config_file)
+        self.config = Config()
         
         self._setup_logging()
         

@@ -3,7 +3,7 @@ import sys
 import codecs
 import shutil
 import logging
-import configparser
+from dotenv import load_dotenv
 
 from .exceptions import HelpfulError
 
@@ -12,84 +12,134 @@ log = logging.getLogger(__name__)
 
 class Config:
     # noinspection PyUnresolvedReferences
-    def __init__(self, config_file):
-        self.config_file = config_file
-        self.find_config()
-
-        config = configparser.ConfigParser(interpolation=None)
-        config.read(config_file, encoding='utf-8')
-
-        confsections = {"Credentials", "Permissions", "Chat", "MusicBot"}.difference(config.sections())
-        if confsections:
-            raise HelpfulError(
-                "One or more required config sections are missing.",
-                "Fix your config.  Each [Section] should be on its own line with "
-                "nothing else on it.  The following sections are missing: {}".format(
-                    ', '.join(['[%s]' % s for s in confsections])
-                ),
-                preface="An error has occured parsing the config:\n"
-            )
+    def __init__(self):
+        load_dotenv()
 
         self._confpreface = "An error has occured reading the config:\n"
         self._confpreface2 = "An error has occured validating the config:\n"
 
-        self._login_token = config.get('Credentials', 'Token', fallback=ConfigDefaults.token)
+        self._login_token = os.getenv('DISCORD_BOT_TOKEN', ConfigDefaults.token)
 
         self.auth = ()
 
-        self.spotify_clientid = config.get('Credentials', 'Spotify_ClientID', fallback=ConfigDefaults.spotify_clientid)
-        self.spotify_clientsecret = config.get('Credentials', 'Spotify_ClientSecret', fallback=ConfigDefaults.spotify_clientsecret)
+        self.spotify_clientid = os.getenv('SPOTIFY_CLIENT_ID', ConfigDefaults.spotify_clientid)
+        self.spotify_clientsecret = os.getenv('SPOTIFY_CLIENT_SECRET', ConfigDefaults.spotify_clientsecret)
 
-        self.owner_id = config.get('Permissions', 'OwnerID', fallback=ConfigDefaults.owner_id)
-        self.dev_ids = config.get('Permissions', 'DevIDs', fallback=ConfigDefaults.dev_ids)
-        self.bot_exception_ids = config.get("Permissions", "BotExceptionIDs", fallback=ConfigDefaults.bot_exception_ids)
+        self.owner_id = os.getenv('OWNER_ID', ConfigDefaults.owner_id)
+        self.dev_ids = os.getenv('DEV_IDS', ConfigDefaults.dev_ids)
+        self.bot_exception_ids = os.getenv('BOT_EXCEPTION_IDS', ConfigDefaults.bot_exception_ids)
 
-        self.command_prefix = config.get('Chat', 'CommandPrefix', fallback=ConfigDefaults.command_prefix)
-        self.bound_channels = config.get('Chat', 'BindToChannels', fallback=ConfigDefaults.bound_channels)
-        self.unbound_servers = config.getboolean('Chat', 'AllowUnboundServers', fallback=ConfigDefaults.unbound_servers)
-        self.autojoin_channels =  config.get('Chat', 'AutojoinChannels', fallback=ConfigDefaults.autojoin_channels)
-        self.dm_nowplaying = config.getboolean('Chat', 'DMNowPlaying', fallback=ConfigDefaults.dm_nowplaying)
-        self.no_nowplaying_auto = config.getboolean('Chat', 'DisableNowPlayingAutomatic', fallback=ConfigDefaults.no_nowplaying_auto)
-        self.nowplaying_channels =  config.get('Chat', 'NowPlayingChannels', fallback=ConfigDefaults.nowplaying_channels)
-        self.delete_nowplaying = config.getboolean('Chat', 'DeleteNowPlaying', fallback=ConfigDefaults.delete_nowplaying)
+        self.command_prefix = os.getenv('COMMAND_PREFIX', ConfigDefaults.command_prefix)
+        self.bound_channels = os.getenv('BIND_TO_CHANNELS', ConfigDefaults.bound_channels)
+        if os.getenv('ALLOW_UNBOUND_SERVERS', str(ConfigDefaults.unbound_servers)).lower() == 'true':
+            self.unbound_servers = True
+        else:
+            self.unbound_servers = False
+        self.autojoin_channels =  os.getenv('AUTO_JOIN_CHANNELS', ConfigDefaults.autojoin_channels)
+        if os.getenv('DM_NOW_PLAYING', str(ConfigDefaults.dm_nowplaying)).lower() == 'true':
+            self.dm_nowplaying = True
+        else:
+            self.dm_nowplaying = False
+        if os.getenv('DISABLE_NOW_PLAYING_AUTOMATIC', str(ConfigDefaults.no_nowplaying_auto)).lower() == 'true':
+            self.no_nowplaying_auto = True
+        else:
+            self.no_nowplaying_auto = False
+        self.nowplaying_channels =  os.getenv('NOW_PLAYING_CHANNELS', ConfigDefaults.nowplaying_channels)
+        if os.getenv('DELETE_NOW_PLAYING', str(ConfigDefaults.delete_nowplaying)).lower() == 'true':
+            self.delete_nowplaying = True
+        else:
+            self.delete_nowplaying = False
 
-        self.default_volume = config.getfloat('MusicBot', 'DefaultVolume', fallback=ConfigDefaults.default_volume)
-        self.skips_required = config.getint('MusicBot', 'SkipsRequired', fallback=ConfigDefaults.skips_required)
-        self.skip_ratio_required = config.getfloat('MusicBot', 'SkipRatio', fallback=ConfigDefaults.skip_ratio_required)
-        self.save_videos = config.getboolean('MusicBot', 'SaveVideos', fallback=ConfigDefaults.save_videos)
-        self.now_playing_mentions = config.getboolean('MusicBot', 'NowPlayingMentions', fallback=ConfigDefaults.now_playing_mentions)
-        self.auto_summon = config.getboolean('MusicBot', 'AutoSummon', fallback=ConfigDefaults.auto_summon)
-        self.auto_playlist = config.getboolean('MusicBot', 'UseAutoPlaylist', fallback=ConfigDefaults.auto_playlist)
-        self.auto_playlist_random = config.getboolean('MusicBot', 'AutoPlaylistRandom', fallback=ConfigDefaults.auto_playlist_random)
-        self.auto_pause = config.getboolean('MusicBot', 'AutoPause', fallback=ConfigDefaults.auto_pause)
-        self.delete_messages = config.getboolean('MusicBot', 'DeleteMessages', fallback=ConfigDefaults.delete_messages)
-        self.delete_invoking = config.getboolean('MusicBot', 'DeleteInvoking', fallback=ConfigDefaults.delete_invoking)
-        self.persistent_queue = config.getboolean('MusicBot', 'PersistentQueue', fallback=ConfigDefaults.persistent_queue)
-        self.status_message = config.get('MusicBot', 'StatusMessage', fallback=ConfigDefaults.status_message)
-        self.write_current_song = config.getboolean('MusicBot', 'WriteCurrentSong', fallback=ConfigDefaults.write_current_song)
-        self.allow_author_skip = config.getboolean('MusicBot', 'AllowAuthorSkip', fallback=ConfigDefaults.allow_author_skip)
-        self.use_experimental_equalization = config.getboolean('MusicBot', 'UseExperimentalEqualization', fallback=ConfigDefaults.use_experimental_equalization)
-        self.embeds = config.getboolean('MusicBot', 'UseEmbeds', fallback=ConfigDefaults.embeds)
-        self.queue_length = config.getint('MusicBot', 'QueueLength', fallback=ConfigDefaults.queue_length)
-        self.remove_ap = config.getboolean('MusicBot', 'RemoveFromAPOnError', fallback=ConfigDefaults.remove_ap)
-        self.show_config_at_start = config.getboolean('MusicBot', 'ShowConfigOnLaunch', fallback=ConfigDefaults.show_config_at_start)
-        self.legacy_skip = config.getboolean('MusicBot', 'LegacySkip', fallback=ConfigDefaults.legacy_skip)
-        self.leavenonowners = config.getboolean('MusicBot', 'LeaveServersWithoutOwner', fallback=ConfigDefaults.leavenonowners)
-        self.usealias = config.getboolean('MusicBot', 'UseAlias', fallback=ConfigDefaults.usealias)
+        self.default_volume = float(os.getenv('DEFAULT_VOLUME', ConfigDefaults.default_volume))
+        self.skips_required = int(os.getenv('SKIPS_REQUIRED', ConfigDefaults.skips_required))
+        self.skip_ratio_required = float(os.getenv('SKIP_RATIO', ConfigDefaults.skip_ratio_required))
+        if os.getenv('SAVE_VIDEOS', str(ConfigDefaults.save_videos)).lower() == 'true':
+                    self.save_videos =  True
+        else:
+                    self.save_videos =  False
+        if os.getenv('NOW_PLAYING_MENTIONS', str(ConfigDefaults.now_playing_mentions)).lower() == 'true':
+                    self.now_playing_mentions =  True
+        else:
+                    self.now_playing_mentions =  False
+        if os.getenv('AUTO_SUMMON', str(ConfigDefaults.auto_summon)).lower() == 'true':
+                    self.auto_summon =  True
+        else:
+                    self.auto_summon =  False
+        if os.getenv('USE_AUTO_PLAYLIST', str(ConfigDefaults.auto_playlist)).lower() == 'true':
+                    self.auto_playlist =  True
+        else:
+                    self.auto_playlist =  False
+        if os.getenv('AUTO_PLAYLIST_RANDOM', str(ConfigDefaults.auto_playlist_random)).lower() == 'true':
+                    self.auto_playlist_random =  True
+        else:
+                    self.auto_playlist_random =  False
+        if os.getenv('AUTO_PAUSE', str(ConfigDefaults.auto_pause)).lower() == 'true':
+                    self.auto_pause =  True
+        else:
+                    self.auto_pause =  False
+        if os.getenv('DELETE_MESSAGES', str(ConfigDefaults.delete_messages)).lower() == 'true':
+                    self.delete_messages =  True
+        else:
+                    self.delete_messages =  False
+        if os.getenv('DELETE_INVOKING', str(ConfigDefaults.delete_invoking)).lower() == 'true':
+                    self.delete_invoking =  True
+        else:
+                    self.delete_invoking =  False
+        if os.getenv('PERSISTENT_QUEUE', str(ConfigDefaults.persistent_queue)).lower() == 'true':
+                    self.persistent_queue =  True
+        else:
+                    self.persistent_queue =  False
+        self.status_message = os.getenv('STATUS_MESSAGE', ConfigDefaults.status_message)
+        if os.getenv('WRITE_CURRENT_SONG', str(ConfigDefaults.write_current_song)).lower() == 'true':
+                    self.write_current_song =  True
+        else:
+                    self.write_current_song =  False
+        if os.getenv('ALLOW_AUTHOR_SKIP', str(ConfigDefaults.allow_author_skip)).lower() == 'true':
+                    self.allow_author_skip =  True
+        else:
+                    self.allow_author_skip =  False
+        if os.getenv('USE_EXPERIMENTAL_EQ', str(ConfigDefaults.use_experimental_equalization)).lower() == 'true':
+                    self.use_experimental_equalization =  True
+        else:
+                    self.use_experimental_equalization =  False
+        if os.getenv('USE_EMBEDS', str(ConfigDefaults.embeds)).lower() == 'true':
+                    self.embeds =  True
+        else:
+                    self.embeds =  False
+        self.queue_length = int(os.getenv('QUEUE_LENGTH', ConfigDefaults.queue_length))
+        if os.getenv('REMOVE_FROM_AP_ON_ERROR', str(ConfigDefaults.remove_ap)).lower() == 'true':
+                    self.remove_ap =  True
+        else:
+                    self.remove_ap =  False
+        if os.getenv('SHOW_CONFIG_ON_LAUNCH', str(ConfigDefaults.show_config_at_start)).lower() == 'true':
+                    self.show_config_at_start =  True
+        else:
+                    self.show_config_at_start =  False
+        if os.getenv('LEGACY_SKIP', str(ConfigDefaults.legacy_skip)).lower() == 'true':
+                    self.legacy_skip =  True
+        else:
+                    self.legacy_skip =  False
+        if os.getenv('LEAVE_SERVERS_WITHOUT_OWNERS', str(ConfigDefaults.leavenonowners)).lower() == 'true':
+                    self.leavenonowners =  True
+        else:
+                    self.leavenonowners =  False
+        if os.getenv('USE_ALIAS', str(ConfigDefaults.usealias)).lower() == 'true':
+                    self.usealias =  True
+        else:
+                    self.usealias =  False
 
-        self.debug_level = config.get('MusicBot', 'DebugLevel', fallback=ConfigDefaults.debug_level)
+        self.debug_level = os.getenv('DEBUG_LEVEL', ConfigDefaults.debug_level)
         self.debug_level_str = self.debug_level
         self.debug_mode = False
 
-        self.blacklist_file = config.get('Files', 'BlacklistFile', fallback=ConfigDefaults.blacklist_file)
-        self.auto_playlist_file = config.get('Files', 'AutoPlaylistFile', fallback=ConfigDefaults.auto_playlist_file)
-        self.i18n_file = config.get('Files', 'i18nFile', fallback=ConfigDefaults.i18n_file)
+        self.blacklist_file = os.getenv('BLACKLIST_FILE', ConfigDefaults.blacklist_file)
+        self.auto_playlist_file = os.getenv('AUTO_PLAYLIST_FILE', ConfigDefaults.auto_playlist_file)
+        self.i18n_file = os.getenv('IL8N_FILE', ConfigDefaults.i18n_file)
         self.auto_playlist_removed_file = None
 
         self.run_checks()
 
         self.missing_keys = set()
-        self.check_changes(config)
 
         self.find_autoplaylist()
 
@@ -263,51 +313,6 @@ class Config:
             )
 
 
-    def find_config(self):
-        config = configparser.ConfigParser(interpolation=None)
-
-        if not os.path.isfile(self.config_file):
-            if os.path.isfile(self.config_file + '.ini'):
-                shutil.move(self.config_file + '.ini', self.config_file)
-                log.info("Moving {0} to {1}, you should probably turn file extensions on.".format(
-                    self.config_file + '.ini', self.config_file
-                ))
-
-            elif os.path.isfile('config/example_options.ini'):
-                shutil.copy('config/example_options.ini', self.config_file)
-                log.warning('Options file not found, copying example_options.ini')
-
-            else:
-                raise HelpfulError(
-                    "Your config files are missing. Neither options.ini nor example_options.ini were found.",
-                    "Grab the files back from the archive or remake them yourself and copy paste the content "
-                    "from the repo. Stop removing important files!"
-                )
-
-        if not config.read(self.config_file, encoding='utf-8'):
-            c = configparser.ConfigParser()
-            try:
-                # load the config again and check to see if the user edited that one
-                c.read(self.config_file, encoding='utf-8')
-
-                if not int(c.get('Permissions', 'OwnerID', fallback=0)): # jake pls no flame
-                    print(flush=True)
-                    log.critical("Please configure config/options.ini and re-run the bot.")
-                    sys.exit(1)
-
-            except ValueError: # Config id value was changed but its not valid
-                raise HelpfulError(
-                    'Invalid value "{}" for OwnerID, config cannot be loaded. '.format(
-                        c.get('Permissions', 'OwnerID', fallback=None)
-                    ),
-                    "The OwnerID option requires a user ID or 'auto'."
-                )
-
-            except Exception as e:
-                print(flush=True)
-                log.critical("Unable to copy config/example_options.ini to {}".format(self.config_file), exc_info=e)
-                sys.exit(2)
-
     def find_autoplaylist(self):
         if not os.path.exists(self.auto_playlist_file):
             if os.path.exists('config/_autoplaylist.txt'):
@@ -333,7 +338,7 @@ class ConfigDefaults:
 
     command_prefix = '!'
     bound_channels = set()
-    unbound_servers = False
+    unbound_servers = True
     autojoin_channels = set()
     dm_nowplaying = False
     no_nowplaying_auto = False
@@ -351,7 +356,7 @@ class ConfigDefaults:
     auto_pause = True
     delete_messages = True
     delete_invoking = False
-    persistent_queue = True
+    persistent_queue = False
     debug_level = 'INFO'
     status_message = None
     write_current_song = False
