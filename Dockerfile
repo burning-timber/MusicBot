@@ -1,26 +1,23 @@
-FROM alpine:edge
+FROM ubuntu:18.04
 
 # Add project source
 WORKDIR /usr/src/musicbot
 COPY . ./
 
 # Install dependencies
-RUN apk update \
-&& apk add --no-cache \
+RUN apt-get update \
+&& apt-get -y install \
   ca-certificates \
   ffmpeg \
-  opus \
+  libopus0 \
   python3 \
-  py3-pip \
-  py3-wheel \
+  python3-pip \
+  python3-wheel \
   libsodium-dev \
 \
 # Install build dependencies
-&& apk add --no-cache --virtual .build-deps \
-  gcc \
-  git \
+&& apt-get -y install \
   libffi-dev \
-  make \
   musl-dev \
   python3-dev \
 \
@@ -28,7 +25,7 @@ RUN apk update \
 && pip3 install --no-cache-dir -r requirements.txt \
 \
 # Clean up build dependencies
-&& apk del .build-deps
+&& apt-get clean
 
 # Create auto playlist
 COPY ./config/_autoplaylist.txt ./config/autoplaylist.txt
